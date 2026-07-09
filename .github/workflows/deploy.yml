@@ -1,0 +1,32 @@
+name: Deploy React Frontend to GCP
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 소스코드 가져오기
+      uses: actions/checkout@v4
+
+    - name: Node.js 세팅
+      uses: actions/setup-node@v4
+      with:
+        node-node-version: 20
+
+    - name: 의존성 설치 및 React 빌드
+      run: |
+        npm install
+        npm run build
+
+    - name: 빌드된 정적 파일을 GCP 서버로 전송 (SCP)
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.GCP_HOST }}
+        username: ${{ secrets.GCP_USERNAME }}
+        key: ${{ secrets.GCP_SSH_KEY }}
+        source: "dist/*"
+        target: "/var/www/recoverpack-frontend"
+        strip_components: 1
