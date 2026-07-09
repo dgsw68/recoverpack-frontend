@@ -3,7 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f7f9fc;
+  --page-bg: #f2f4f6; /* TDS grey50 느낌: 프레임 바깥 배경 */
+  --frame-bg: #ffffff;
+  --tds-blue: #3182f6;
+  --tds-grey800: #4e5968;
+  --tds-grey900: #191f28;
 }
 
 html {
@@ -11,56 +15,34 @@ html {
 }
 
 body {
-  background-color: var(--bg);
-  color: #0f172a;
+  background: var(--page-bg);
+  color: var(--tds-grey900);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* 은은한 배경 그라데이션 */
-.app-bg {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(60rem 60rem at 12% -10%, rgba(49, 104, 245, 0.1), transparent 55%),
-    radial-gradient(50rem 50rem at 100% 0%, rgba(34, 211, 238, 0.1), transparent 50%);
-  background-attachment: fixed;
+/* 데스크톱에서도 토스 미니앱처럼 보이도록 폰 너비 프레임으로 감싼다 */
+.tds-frame {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--frame-bg);
+  display: flex;
+  flex-direction: column;
 }
-
-@layer components {
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
-  }
-  .btn-primary {
-    @apply btn text-white shadow-lg shadow-brand-600/25 focus-visible:ring-brand-500;
-    background-image: linear-gradient(135deg, #3168f5 0%, #1f4ce0 60%, #06b6d4 130%);
-  }
-  .btn-primary:hover:not(:disabled) {
-    @apply -translate-y-0.5 shadow-xl shadow-brand-600/30;
-  }
-  .btn-secondary {
-    @apply btn border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-slate-400;
-  }
-  .btn-ghost {
-    @apply btn text-slate-500 hover:bg-slate-100 hover:text-slate-700;
-  }
-  .card {
-    @apply rounded-2xl border border-slate-200/80 bg-white shadow-card;
-  }
-  .input-field {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 placeholder:text-slate-400;
-  }
-  .label-text {
-    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500;
-  }
-  .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+@media (min-width: 520px) {
+  .tds-frame {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.03), 0 12px 40px rgba(0, 0, 0, 0.06);
   }
 }
 
-/* 스켈레톤 shimmer */
+/* 스켈레톤 shimmer (로딩 표현 보조용) */
 .shimmer {
   position: relative;
   overflow: hidden;
+  background: #f2f4f6;
 }
 .shimmer::after {
   content: "";
@@ -70,7 +52,7 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.6),
+    rgba(255, 255, 255, 0.65),
     transparent
   );
   animation: shimmer 1.4s infinite;
@@ -79,4 +61,18 @@ body {
   100% {
     transform: translateX(100%);
   }
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.4s ease-out both;
 }
