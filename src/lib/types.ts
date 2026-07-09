@@ -158,3 +158,22 @@ export interface AuthSession {
   expiresIn: number;
   user: AuthUser;
 }
+
+export type PackageStatus = "draft" | "pending" | "processing" | "completed" | "failed";
+
+/** 마이페이지에서 보여주는 패키지 생성 기록 */
+export interface MyPackage {
+  projectId: string;
+  packageId: string;
+  title: string;
+  damageType: DamageType;
+  location: string;
+  occurredAt: string;
+  createdAt: string;
+  updatedAt: string;
+  status: PackageStatus;
+  fileCount: number;
+  evidenceCount: number;
+  timelineCount: number;
+  downloadAvailable: boolean;
+}
