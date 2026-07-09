@@ -2,19 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import ProgressSteps from "@/components/ProgressSteps";
-import StepHeader from "@/components/StepHeader";
+import { Badge, Button, ListRow } from "@toss/tds-mobile";
+import StepScreen from "@/components/StepScreen";
 import NoticeBox from "@/components/NoticeBox";
-import FileUploadCard from "@/components/FileUploadCard";
 import { filesToUploadedFiles } from "@/lib/files";
 import { uploadFiles } from "@/lib/api";
-import {
-  loadOrCreateProject,
-  patchProject,
-  setFiles,
-  uid,
-} from "@/lib/storage";
-import type { FileCategory, UploadedFile } from "@/lib/types";
+import { loadOrCreateProject, patchProject, setFiles, uid } from "@/lib/storage";
+import { FILE_CATEGORIES, type FileCategory, type UploadedFile } from "@/lib/types";
 
 const SAMPLE_FILES: Omit<UploadedFile, "id" | "createdAt">[] = [
   { name: "거실_바닥_침수.jpg", size: 2_310_000, mimeType: "image/jpeg", fileType: "피해 사진", isImage: true },
@@ -24,6 +18,12 @@ const SAMPLE_FILES: Omit<UploadedFile, "id" | "createdAt">[] = [
   { name: "복구공사_견적서.pdf", size: 320_000, mimeType: "application/pdf", fileType: "수리 견적서", isImage: false },
   { name: "재난문자_캡처.png", size: 480_000, mimeType: "image/png", fileType: "재난문자 캡처", isImage: true },
 ];
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function UploadPage() {
   const router = useRouter();
@@ -87,14 +87,24 @@ export default function UploadPage() {
   }, {});
 
   return (
-    <div>
-      <ProgressSteps current="upload" />
-      <StepHeader
-        eyebrow="STEP 2"
-        title="피해 자료를 업로드하세요"
-        description="피해 사진, 영수증, 수리 견적서, 재난문자 캡처를 올려주세요. 파일은 브라우저에만 저장되며, AI가 자동으로 분류합니다."
-      />
-
+    <StepScreen
+      step={2}
+      backTo="/damage-type"
+      title="피해 자료를 올려주세요"
+      subtitle="사진·영수증·수리 견적서·재난문자 캡처를 올려주세요. 파일은 브라우저에만 저장되고, AI가 자동으로 분류해요."
+      footer={
+        <Button
+          key={files.length === 0 ? "cta-empty" : "cta-ready"}
+          display="full"
+          size="xlarge"
+          loading={busy}
+          disabled={files.length === 0}
+          onClick={handleNext}
+        >
+          {files.length > 0 ? `${files.length}개 자료로 AI 분류 시작` : "자료를 먼저 올려주세요"}
+        </Button>
+      }
+    >
       {/* 드롭존 */}
       <div
         onDragOver={(e) => {
@@ -107,36 +117,25 @@ export default function UploadPage() {
           setDragging(false);
           if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
         }}
-        className={`relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition ${
-          dragging
-            ? "border-brand-500 bg-brand-50"
-            : "border-slate-300 bg-white/60 hover:border-brand-300 hover:bg-white"
+        className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-9 text-center transition ${
+          dragging ? "border-[#3182f6] bg-[#f4f8ff]" : "border-[#d1d6db] bg-[#f9fafb]"
         }`}
       >
-        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-aqua-500 text-white shadow-lg shadow-brand-500/30">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#3182f6] text-white">
           <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7">
             <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M5 15v3a2 2 0 002 2h10a2 2 0 002-2v-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
         </span>
-        <p className="mt-4 font-semibold text-slate-800">
-          파일을 끌어다 놓거나 클릭해서 업로드
-        </p>
-        <p className="mt-1 text-sm text-slate-400">
-          이미지(JPG, PNG) · PDF · 여러 개 선택 가능
-        </p>
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="btn-primary px-6"
-            disabled={busy}
-          >
-            {busy ? "처리 중…" : "파일 선택"}
-          </button>
-          <button type="button" onClick={loadSamples} className="btn-secondary px-6">
+        <p className="mt-3 font-bold text-[#333d4b]">파일을 끌어다 놓거나 선택하세요</p>
+        <p className="mt-1 text-[13px] text-[#8b95a1]">이미지(JPG·PNG) · PDF · 여러 개 가능</p>
+        <div className="mt-4 flex w-full flex-col gap-2">
+          <Button display="full" size="medium" loading={busy} onClick={() => inputRef.current?.click()}>
+            파일 선택
+          </Button>
+          <Button display="full" size="medium" color="dark" variant="weak" onClick={loadSamples}>
             샘플 자료 불러오기
-          </button>
+          </Button>
         </div>
         <input
           ref={inputRef}
@@ -151,62 +150,75 @@ export default function UploadPage() {
         />
       </div>
 
-      {/* 요약 칩 */}
+      {/* 요약 배지 */}
       {files.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="chip bg-slate-900 text-white">
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          <Badge size="small" color="blue" variant="fill">
             총 {files.length}개
-          </span>
+          </Badge>
           {Object.entries(counts).map(([type, n]) => (
-            <span key={type} className="chip bg-slate-100 text-slate-600">
+            <Badge key={type} size="small" color="elephant" variant="weak">
               {type} {n}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
 
       {/* 파일 목록 */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {files.map((file) => (
-          <FileUploadCard
-            key={file.id}
-            file={file}
-            onChangeType={changeType}
-            onRemove={removeFile}
-          />
-        ))}
-      </div>
+      {files.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          {files.map((file) => (
+            <div key={file.id} className="rounded-2xl border border-[#e5e8eb] bg-white">
+              <ListRow
+                left={
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[#f2f4f6]">
+                    {file.isImage && file.previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={file.previewUrl} alt={file.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="grid h-full w-full place-items-center text-[20px]">📄</span>
+                    )}
+                  </div>
+                }
+                contents={<ListRow.Texts type="2RowTypeA" top={file.name} bottom={formatSize(file.size)} />}
+                right={
+                  <button
+                    type="button"
+                    aria-label="파일 삭제"
+                    onClick={() => removeFile(file.id)}
+                    className="grid h-8 w-8 place-items-center rounded-full text-[#8b95a1] active:bg-[#f2f4f6]"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+                      <path d="M6 7h12M9 7V5.5A1.5 1.5 0 0110.5 4h3A1.5 1.5 0 0115 5.5V7m-8 0l.7 11a2 2 0 002 1.9h4.6a2 2 0 002-1.9L17 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                }
+              />
+              <div className="px-4 pb-3">
+                <select
+                  value={file.fileType}
+                  onChange={(e) => changeType(file.id, e.target.value as FileCategory)}
+                  aria-label="파일 종류 선택"
+                  className="w-full rounded-xl border border-[#e5e8eb] bg-[#f9fafb] px-3 py-2 text-[13px] font-medium text-[#4e5968] outline-none focus:border-[#3182f6]"
+                >
+                  {FILE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {files.length === 0 && (
         <div className="mt-4">
           <NoticeBox tone="info">
-            아직 업로드된 자료가 없습니다. 실제 파일을 올리거나{" "}
-            <b>샘플 자료 불러오기</b>로 데모를 진행할 수 있습니다.
+            아직 올린 자료가 없어요. 실제 파일을 올리거나 <b>샘플 자료 불러오기</b>로
+            데모를 진행할 수 있어요.
           </NoticeBox>
         </div>
       )}
-
-      <div className="mt-8 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => router.push("/damage-type")}
-          className="btn-ghost"
-        >
-          이전
-        </button>
-        <button
-          type="button"
-          onClick={handleNext}
-          disabled={files.length === 0 || busy}
-          className="btn-primary px-7"
-          title={files.length === 0 ? "자료를 먼저 업로드하세요" : undefined}
-        >
-          AI 분류 시작
-          <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
-            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      </div>
-    </div>
+    </StepScreen>
   );
 }
