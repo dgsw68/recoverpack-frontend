@@ -2,22 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Button, ListRow } from "@toss/tds-mobile";
+import { Badge, ListRow } from "@toss/tds-mobile";
 import StepScreen from "@/components/StepScreen";
 import NoticeBox from "@/components/NoticeBox";
-import { analyzeProject } from "@/lib/api";
-import { buildMockEvidence } from "@/lib/mock";
-import { loadOrCreateProject, patchProject, setEvidence } from "@/lib/storage";
+import RequireAuth from "@/components/RequireAuth";
+import PillButton from "@/components/PillButton";
+import { analyzeProject, updateEvidence } from "@/api/evidence";
+import { ApiError } from "@/api/client";
+import { loadOrCreateProject, setEvidence } from "@/lib/storage";
+import { FileTextIcon } from "@/components/icons";
 import {
   EVIDENCE_CATEGORIES,
   type EvidenceCategory,
   type EvidenceItem,
+  type UploadedFile,
 } from "@/lib/types";
 
-function confidenceColor(pct: number): "green" | "blue" | "yellow" {
-  if (pct >= 90) return "green";
-  if (pct >= 80) return "blue";
-  return "yellow";
+function looksLikeImage(url: string): boolean {
+  return /\.(png|jpe?g|gif|webp|heic)(\?|$)/i.test(url);
 }
 
 function AnalyzingState() {
@@ -35,7 +37,7 @@ function AnalyzingState() {
         </span>
         <div>
           <p className="text-[15px] font-bold text-[#1b64da]">AI가 자료를 분류하고 있어요…</p>
-          <p className="text-[13px] text-[#3182f6]/80">카테고리 분류 · 설명문 생성 · 신뢰도 계산 중</p>
+          <p className="text-[13px] text-[#3182f6]/80">카테고리 분류 · 설명문 생성 중</p>
         </div>
       </div>
       <div className="flex flex-col gap-2">
@@ -50,23 +52,28 @@ function AnalyzingState() {
 function EvidenceRow({
   item,
   index,
-  onChange,
+  onCategoryChange,
+  onCaptionChange,
+  onCaptionCommit,
 }: {
   item: EvidenceItem;
   index: number;
-  onChange: (id: string, patch: Partial<EvidenceItem>) => void;
+  onCategoryChange: (id: string, category: EvidenceCategory) => void;
+  onCaptionChange: (id: string, caption: string) => void;
+  onCaptionCommit: (id: string) => void;
 }) {
-  const pct = Math.round(item.confidence * 100);
   return (
     <div className="overflow-hidden rounded-2xl border border-[#e5e8eb] bg-white">
       <div className="relative h-40 w-full bg-[#f2f4f6]">
-        {item.isImage && item.previewUrl ? (
+        {item.isImage && (item.previewUrl || item.fileUrl) ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.previewUrl} alt={item.fileName} className="h-full w-full object-cover" />
+          <img src={item.previewUrl || item.fileUrl} alt={item.fileName} className="h-full w-full object-cover" />
         ) : (
-          <div className="grid h-full w-full place-items-center text-[40px]">📄</div>
+          <div className="grid h-full w-full place-items-center text-[#b0b8c1]">
+            <FileTextIcon className="h-9 w-9" />
+          </div>
         )}
-        <span className="absolute left-2.5 top-2.5 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white">
+        <span className="absolute left-2.5 top-2.5 rounded-md bg-black/60 px-2 py-0.5 text-[12px] font-bold text-white">
           #{index + 1}
         </span>
       </div>
@@ -79,28 +86,24 @@ function EvidenceRow({
           {item.edited && (
             <Badge size="small" color="elephant" variant="weak">수정됨</Badge>
           )}
-          <Badge size="small" color={confidenceColor(pct)} variant="weak">
-            신뢰도 {pct}%
-          </Badge>
         </div>
 
         <label className="mb-1 block text-[12px] font-bold text-[#8b95a1]">AI 분류 카테고리</label>
         <select
           value={item.category}
-          onChange={(e) =>
-            onChange(item.id, { category: e.target.value as EvidenceCategory, edited: true })
-          }
+          onChange={(e) => onCategoryChange(item.id, e.target.value as EvidenceCategory)}
           className="mb-3 w-full rounded-xl border border-[#e5e8eb] bg-[#f9fafb] px-3 py-2.5 text-[14px] font-medium text-[#333d4b] outline-none focus:border-[#3182f6]"
         >
           {EVIDENCE_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
 
         <label className="mb-1 block text-[12px] font-bold text-[#8b95a1]">AI 설명문 (수정 가능)</label>
         <textarea
           value={item.caption}
-          onChange={(e) => onChange(item.id, { caption: e.target.value, edited: true })}
+          onChange={(e) => onCaptionChange(item.id, e.target.value)}
+          onBlur={() => onCaptionCommit(item.id)}
           rows={2}
           placeholder="설명문을 입력하세요"
           className="w-full resize-none rounded-xl border border-[#e5e8eb] bg-white px-3 py-2.5 text-[14px] leading-relaxed text-[#333d4b] outline-none focus:border-[#3182f6]"
@@ -110,39 +113,57 @@ function EvidenceRow({
   );
 }
 
-export default function AnalysisPage() {
+function AnalysisPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [evidence, setEvidenceState] = useState<EvidenceItem[]>([]);
-  const [usedMock, setUsedMock] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       const project = loadOrCreateProject();
+      setProjectId(project.projectId);
+
       if (project.evidence.length > 0) {
         setEvidenceState(project.evidence);
-        setUsedMock(!project.backendConnected);
         setLoading(false);
         return;
       }
-      let result: EvidenceItem[] | null = null;
-      let mock = false;
+      if (!project.projectId) {
+        setError("프로젝트 정보가 없어요. 이전 단계로 돌아가 주세요.");
+        setLoading(false);
+        return;
+      }
+
+      const localFiles: UploadedFile[] = project.files;
+
       try {
         const res = await analyzeProject(project.projectId);
-        result = res.evidence;
-        patchProject({ backendConnected: true });
-      } catch {
-        mock = true;
-        await new Promise((r) => setTimeout(r, 1400));
-        result = buildMockEvidence(project.files);
-        patchProject({ backendConnected: false });
+        if (cancelled) return;
+        const mapped: EvidenceItem[] = res.map((ev) => {
+          const local = localFiles.find((f) => f.remoteId === ev.fileId);
+          return {
+            id: ev.id,
+            fileId: ev.fileId,
+            fileName: local?.name ?? ev.fileUrl.split("/").pop() ?? ev.fileId,
+            fileUrl: ev.fileUrl,
+            previewUrl: local?.previewUrl,
+            isImage: local ? local.isImage : looksLikeImage(ev.fileUrl),
+            category: ev.category,
+            caption: ev.caption,
+            edited: false,
+          };
+        });
+        setEvidenceState(mapped);
+        setEvidence(mapped);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof ApiError ? err.message : "AI 분석에 실패했어요.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      if (cancelled) return;
-      setUsedMock(mock);
-      setEvidenceState(result ?? []);
-      setEvidence(result ?? []);
-      setLoading(false);
     };
     run();
     return () => {
@@ -150,24 +171,45 @@ export default function AnalysisPage() {
     };
   }, []);
 
-  const handleChange = (id: string, patch: Partial<EvidenceItem>) => {
-    setEvidenceState((prev) => {
-      const next = prev.map((e) => (e.id === id ? { ...e, ...patch } : e));
-      setEvidence(next);
-      return next;
-    });
+  const persist = (next: EvidenceItem[]) => {
+    setEvidenceState(next);
+    setEvidence(next);
+  };
+
+  const handleCategoryChange = (id: string, category: EvidenceCategory) => {
+    const next = evidence.map((e) => (e.id === id ? { ...e, category, edited: true } : e));
+    persist(next);
+    if (projectId) {
+      updateEvidence(projectId, id, { category }).catch(() => {
+        setError("수정 사항 저장에 실패했어요. 다시 시도해 주세요.");
+      });
+    }
+  };
+
+  const handleCaptionChange = (id: string, caption: string) => {
+    setEvidenceState((prev) => prev.map((e) => (e.id === id ? { ...e, caption, edited: true } : e)));
+  };
+
+  const handleCaptionCommit = (id: string) => {
+    const item = evidence.find((e) => e.id === id);
+    setEvidence(evidence);
+    if (projectId && item) {
+      updateEvidence(projectId, id, { caption: item.caption }).catch(() => {
+        setError("수정 사항 저장에 실패했어요. 다시 시도해 주세요.");
+      });
+    }
   };
 
   const editedCount = evidence.filter((e) => e.edited).length;
 
   return (
     <StepScreen
-      step={3}
+      step={4}
       backTo="/upload"
       title="AI 분류 결과를 확인하세요"
       subtitle="AI가 제안한 카테고리와 설명문이에요. 정확하지 않은 부분은 직접 수정할 수 있어요."
       footer={
-        <Button
+        <PillButton
           key={loading || evidence.length === 0 ? "cta-wait" : "cta-ready"}
           display="full"
           size="xlarge"
@@ -175,37 +217,49 @@ export default function AnalysisPage() {
           onClick={() => router.push("/timeline")}
         >
           타임라인 만들기
-        </Button>
+        </PillButton>
       }
     >
       <div className="mb-4">
         <NoticeBox tone="warning">
-          AI 분류와 신뢰도는 <b>참고용</b>이에요. AI는 보상 가능 여부를 판단하지
-          않으며, 최종 내용은 직접 확인·수정해 주세요.
+          AI 분류는 <b>참고용</b>이에요. AI는 보상 가능 여부를 판단하지 않으며,
+          최종 내용은 직접 확인·수정해 주세요.
         </NoticeBox>
       </div>
+
+      {error && (
+        <div className="mb-4">
+          <NoticeBox tone="warning">{error}</NoticeBox>
+        </div>
+      )}
 
       {loading ? (
         <AnalyzingState />
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            <Badge size="small" color="blue" variant="fill">{evidence.length}개 항목 분류</Badge>
-            {editedCount > 0 && (
-              <Badge size="small" color="green" variant="weak">{editedCount}개 수정됨</Badge>
-            )}
-            <Badge size="small" color={usedMock ? "yellow" : "green"} variant="weak">
-              {usedMock ? "데모(목업) 분석" : "백엔드 분석 완료"}
-            </Badge>
-          </div>
+          {evidence.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              <Badge size="small" color="blue" variant="fill">{evidence.length}개 항목 분류</Badge>
+              {editedCount > 0 && (
+                <Badge size="small" color="green" variant="weak">{editedCount}개 수정됨</Badge>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col gap-3">
             {evidence.map((item, index) => (
-              <EvidenceRow key={item.id} item={item} index={index} onChange={handleChange} />
+              <EvidenceRow
+                key={item.id}
+                item={item}
+                index={index}
+                onCategoryChange={handleCategoryChange}
+                onCaptionChange={handleCaptionChange}
+                onCaptionCommit={handleCaptionCommit}
+              />
             ))}
           </div>
 
-          {evidence.length === 0 && (
+          {evidence.length === 0 && !error && (
             <NoticeBox tone="info">
               분류할 자료가 없어요. 업로드 단계로 돌아가 자료를 추가해 주세요.
             </NoticeBox>
@@ -213,5 +267,13 @@ export default function AnalysisPage() {
         </>
       )}
     </StepScreen>
+  );
+}
+
+export default function AnalysisPageWrapper() {
+  return (
+    <RequireAuth>
+      <AnalysisPage />
+    </RequireAuth>
   );
 }
