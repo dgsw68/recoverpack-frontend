@@ -2,36 +2,94 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Button, ListRow } from "@toss/tds-mobile";
+import { Badge, ListRow } from "@toss/tds-mobile";
 import StepScreen from "@/components/StepScreen";
 import NoticeBox from "@/components/NoticeBox";
+import RequireAuth from "@/components/RequireAuth";
+import PillButton from "@/components/PillButton";
 import { DAMAGE_TYPES } from "@/lib/damage";
-import { createProject } from "@/lib/api";
+import { createProject } from "@/api/projects";
+import { ApiError } from "@/api/client";
 import { loadOrCreateProject, patchProject, setDamageType } from "@/lib/storage";
 import type { DamageType } from "@/lib/types";
+import { FloodIcon, FireIcon, SnowIcon, TyphoonIcon } from "@/components/icons";
 
-const DEFAULT_TYPE: DamageType = "침수";
+const DEFAULT_TYPE: DamageType = "flood";
 
-export default function DamageTypePage() {
+const TYPE_ICON: Record<DamageType, (props: { className?: string }) => JSX.Element> = {
+  flood: FloodIcon,
+  fire: FireIcon,
+  heavy_snow: SnowIcon,
+  typhoon: TyphoonIcon,
+};
+
+function DamageTypePage() {
   const router = useRouter();
   const [selected, setSelected] = useState<DamageType>(DEFAULT_TYPE);
+  const [title, setTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [occurredAt, setOccurredAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const project = loadOrCreateProject();
     if (project.damageType) setSelected(project.damageType);
+    setTitle(project.title);
+    setLocation(project.location);
+    setOccurredAt(project.occurredAt);
   }, []);
 
   const handleNext = async () => {
     setSubmitting(true);
-    setDamageType(selected);
-    try {
-      const res = await createProject(selected);
-      patchProject({ projectId: res.projectId, backendConnected: true });
-    } catch {
-      patchProject({ backendConnected: false });
+    setError(null);
+    const label = DAMAGE_TYPES.find((d) => d.type === selected)?.label ?? "침수";
+    const finalTitle = title.trim() || `${label} 피해`;
+
+    if (!location.trim()) {
+      setError("피해 위치를 입력해 주세요.");
+      setSubmitting(false);
+      return;
     }
-    router.push("/upload");
+    if (!occurredAt) {
+      setError("피해 발생 시각을 입력해 주세요.");
+      setSubmitting(false);
+      return;
+    }
+    // datetime-local -> "YYYY-MM-DD HH:mm"
+    const formattedOccurredAt = occurredAt.replace("T", " ");
+    try {
+      const res = await createProject({
+        damageType: selected,
+        title: finalTitle,
+        location,
+        occurredAt: formattedOccurredAt,
+      });
+      const projectId = "projectId" in res ? res.projectId : res.id;
+      patchProject({
+        projectId,
+        damageType: selected,
+        title: finalTitle,
+        location,
+        occurredAt: formattedOccurredAt,
+        ...(!("projectId" in res)
+          ? {
+              description: res.description,
+              reporterName: res.reporterName,
+              reporterPhone: res.reporterPhone,
+              reporterAddress: res.reporterAddress,
+              residenceType: res.residenceType,
+              indirectSupport: res.indirectSupport,
+            }
+          : {}),
+      });
+      router.push("/reporter");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "프로젝트 생성에 실패했어요.");
+      setDamageType(selected);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -41,19 +99,22 @@ export default function DamageTypePage() {
       title="어떤 피해를 겪으셨나요?"
       subtitle="피해 유형을 선택하면 그에 맞는 분류 기준과 타임라인 템플릿을 준비해 드려요."
       footer={
-        <Button
-          display="full"
-          size="xlarge"
-          loading={submitting}
-          onClick={handleNext}
-        >
-          {selected} 피해로 시작하기
-        </Button>
+        <>
+          {error && (
+            <div className="mb-2">
+              <NoticeBox tone="warning">{error}</NoticeBox>
+            </div>
+          )}
+          <PillButton display="full" size="xlarge" loading={submitting} onClick={handleNext}>
+            {DAMAGE_TYPES.find((d) => d.type === selected)?.label} 피해로 시작하기
+          </PillButton>
+        </>
       }
     >
       <div className="flex flex-col gap-2.5">
         {DAMAGE_TYPES.map((meta) => {
           const isSelected = selected === meta.type;
+          const Icon = TYPE_ICON[meta.type];
           return (
             <div
               key={meta.type}
@@ -66,14 +127,18 @@ export default function DamageTypePage() {
               <ListRow
                 onClick={() => setSelected(meta.type)}
                 left={
-                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-[22px] shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-                    {meta.emoji}
+                  <div
+                    className={`grid h-11 w-11 place-items-center rounded-2xl ${
+                      isSelected ? "bg-[#3182f6] text-white" : "bg-[#f2f4f6] text-[#4e5968]"
+                    }`}
+                  >
+                    <Icon className="h-[22px] w-[22px]" />
                   </div>
                 }
                 contents={
                   <ListRow.Texts
                     type="2RowTypeA"
-                    top={meta.type}
+                    top={meta.label}
                     bottom={meta.description}
                   />
                 }
@@ -104,12 +169,60 @@ export default function DamageTypePage() {
         })}
       </div>
 
+      <div className="mt-4 flex flex-col gap-3">
+        <div>
+          <label className="mb-1 block text-[12px] font-bold text-[#8b95a1]">
+            제목 (선택)
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="예: 우리 집 침수 피해"
+            className="w-full rounded-xl border border-[#e5e8eb] bg-[#f9fafb] px-3.5 py-3 text-[15px] outline-none focus:border-[#3182f6]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[12px] font-bold text-[#8b95a1]">
+            피해 위치
+          </label>
+          <input
+            type="text"
+            required
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="예: 서울특별시 강남구"
+            className="w-full rounded-xl border border-[#e5e8eb] bg-[#f9fafb] px-3.5 py-3 text-[15px] outline-none focus:border-[#3182f6]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[12px] font-bold text-[#8b95a1]">
+            피해 발생 시각
+          </label>
+          <input
+            type="datetime-local"
+            required
+            value={occurredAt}
+            onChange={(e) => setOccurredAt(e.target.value)}
+            className="w-full rounded-xl border border-[#e5e8eb] bg-[#f9fafb] px-3.5 py-3 text-[15px] outline-none focus:border-[#3182f6]"
+          />
+        </div>
+      </div>
+
       <div className="mt-4">
         <NoticeBox tone="info">
-          MVP 데모에서는 <b>침수</b> 피해가 기본으로 준비되어 있어요. 다른 유형도
-          동일한 방식으로 정리돼요.
+          <b>침수</b> 피해가 기본으로 준비되어 있어요. 다른 유형도 동일한 방식으로
+          정리돼요.
         </NoticeBox>
       </div>
     </StepScreen>
+  );
+}
+
+export default function DamageTypePageWrapper() {
+  return (
+    <RequireAuth>
+      <DamageTypePage />
+    </RequireAuth>
   );
 }
