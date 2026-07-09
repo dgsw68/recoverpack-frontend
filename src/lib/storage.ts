@@ -1,10 +1,12 @@
 import type {
   DamageType,
+  IndirectSupport,
   EvidenceItem,
   ProjectState,
   TimelineEvent,
   UploadedFile,
 } from "./types";
+import { DEFAULT_INDIRECT_SUPPORT } from "./types";
 
 const STORAGE_KEY = "recoverpack:project";
 
@@ -24,9 +26,17 @@ export function uid(prefix = "id"): string {
 export function createEmptyProject(): ProjectState {
   const now = new Date().toISOString();
   return {
-    projectId: uid("proj"),
-    backendConnected: false,
+    projectId: null,
     damageType: null,
+    title: "",
+    location: "",
+    occurredAt: "",
+    description: "",
+    reporterName: "",
+    reporterPhone: "",
+    reporterAddress: "",
+    residenceType: "",
+    indirectSupport: { ...DEFAULT_INDIRECT_SUPPORT },
     files: [],
     evidence: [],
     timeline: [],
@@ -35,13 +45,26 @@ export function createEmptyProject(): ProjectState {
   };
 }
 
-/** localStorage에서 프로젝트 불러오기 */
+/** File 객체는 직렬화할 수 없으므로 저장 전에 제거합니다. */
+function stripUnserializable(files: UploadedFile[]): UploadedFile[] {
+  return files.map(({ file: _file, ...rest }) => rest);
+}
+
+/** localStorage에서 프로젝트 불러오기 (예전 스키마의 누락된 필드는 기본값으로 채움) */
 export function loadProject(): ProjectState | null {
   if (!isBrowser()) return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as ProjectState;
+    const parsed = JSON.parse(raw) as Partial<ProjectState>;
+    return {
+      ...createEmptyProject(),
+      ...parsed,
+      indirectSupport: {
+        ...DEFAULT_INDIRECT_SUPPORT,
+        ...(parsed.indirectSupport as Partial<IndirectSupport> | undefined),
+      },
+    };
   } catch {
     return null;
   }
@@ -58,10 +81,13 @@ export function loadOrCreateProject(): ProjectState {
 
 /** 프로젝트 전체 저장 */
 export function saveProject(project: ProjectState): ProjectState {
-  if (!isBrowser()) return project;
   const next = { ...project, updatedAt: new Date().toISOString() };
+  if (!isBrowser()) return next;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ ...next, files: stripUnserializable(next.files) }),
+    );
   } catch {
     // 용량 초과(이미지 data URL 다수) 등은 조용히 무시
   }
@@ -88,10 +114,6 @@ export function setEvidence(evidence: EvidenceItem[]): ProjectState {
 
 export function setTimeline(timeline: TimelineEvent[]): ProjectState {
   return patchProject({ timeline });
-}
-
-export function setBackendConnected(connected: boolean): ProjectState {
-  return patchProject({ backendConnected: connected });
 }
 
 /** 프로젝트 초기화 */
