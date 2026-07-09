@@ -16,6 +16,10 @@ jobs:
       with:
         node-node-version: 20
 
+    - name: 환경변수(.env) 생성
+      run: |
+        echo "${{ secrets.FRONT_ENV }}" > .env
+
     - name: 의존성 설치 및 React 빌드
       run: |
         npm install
