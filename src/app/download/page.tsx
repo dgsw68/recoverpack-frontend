@@ -103,6 +103,17 @@ function DownloadPage() {
             <PillButton
               display="full"
               size="large"
+              color="blue"
+              variant="weak"
+              onClick={() => router.push("/my")}
+            >
+              내 기록 보기
+            </PillButton>
+          </div>
+          <div className="mt-2">
+            <PillButton
+              display="full"
+              size="large"
               color="dark"
               variant="weak"
               onClick={() => {

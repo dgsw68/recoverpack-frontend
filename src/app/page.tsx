@@ -34,8 +34,9 @@ const FLOW = ["피해 유형", "자료 업로드", "AI 분류", "타임라인", 
 
 export default function LandingPage() {
   const router = useRouter();
+  const loggedIn = isAuthenticated();
   const startPackage = () => {
-    if (!isAuthenticated()) {
+    if (!loggedIn) {
       router.push("/login?reason=auth&next=/damage-type");
       return;
     }
@@ -112,9 +113,9 @@ export default function LandingPage() {
             size="xlarge"
             color="dark"
             variant="weak"
-            onClick={() => router.push("/login")}
+            onClick={() => router.push(loggedIn ? "/my" : "/login?next=/my")}
           >
-            로그인
+            {loggedIn ? "내 기록 보기" : "로그인"}
           </PillButton>
         </div>
       </div>

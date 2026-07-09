@@ -25,7 +25,7 @@ export default function RegisterPage() {
     try {
       const session = await register({ name, email, password });
       saveSession(session);
-      router.push("/damage-type");
+      router.push("/my");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "회원가입에 실패했어요.");
     } finally {
