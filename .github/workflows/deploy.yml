@@ -27,6 +27,6 @@ jobs:
         host: ${{ secrets.GCP_HOST }}
         username: ${{ secrets.GCP_USERNAME }}
         key: ${{ secrets.GCP_SSH_KEY }}
-        source: "build/*"
+        source: "out/*"
         target: "/var/www/recoverpack-frontend"
         strip_components: 1
