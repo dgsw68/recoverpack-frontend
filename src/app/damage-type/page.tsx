@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, ListRow } from "@toss/tds-mobile";
+import { Badge, ListRow } from "@/components/mobile-ui";
 import StepScreen from "@/components/StepScreen";
 import NoticeBox from "@/components/NoticeBox";
 import RequireAuth from "@/components/RequireAuth";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge } from "@toss/tds-mobile";
+import { Badge } from "@/components/mobile-ui";
 import PillButton from "@/components/PillButton";
 import { uid } from "@/lib/storage";
 import type { TimelineEvent } from "@/lib/types";

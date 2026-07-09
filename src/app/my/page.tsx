@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Top } from "@toss/tds-mobile";
+import { Top } from "@/components/mobile-ui";
 import NoticeBox from "@/components/NoticeBox";
 import PillButton from "@/components/PillButton";
 import RequireAuth from "@/components/RequireAuth";

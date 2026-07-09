@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Top } from "@toss/tds-mobile";
+import { Top } from "@/components/mobile-ui";
 import type { ReactNode } from "react";
 
 export const STEP_LABELS = [

@@ -26,7 +26,7 @@ export default function RootLayout({
     <html lang="ko">
       <body>
         <Providers>
-          <div className="tds-frame">{children}</div>
+          <div className="app-frame">{children}</div>
         </Providers>
       </body>
     </html>

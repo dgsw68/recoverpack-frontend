@@ -1,4 +1,4 @@
-import { Badge, ListRow } from "@toss/tds-mobile";
+import { Badge, ListRow } from "@/components/mobile-ui";
 import type { PackageEntry } from "@/lib/types";
 import { FilePdfIcon, FileSheetIcon, FileCsvIcon, FileTextIcon, FolderIcon, PackageIcon } from "@/components/icons";
 

@@ -3,7 +3,7 @@
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Top } from "@toss/tds-mobile";
+import { Top } from "@/components/mobile-ui";
 import NoticeBox from "@/components/NoticeBox";
 import PillButton from "@/components/PillButton";
 import { login } from "@/api/auth";

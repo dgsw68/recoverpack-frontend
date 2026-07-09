@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --page-bg: #f2f4f6; /* TDS grey50 느낌: 프레임 바깥 배경 */
+  --page-bg: #f2f4f6;
   --frame-bg: #ffffff;
-  --tds-blue: #3182f6;
-  --tds-grey800: #4e5968;
-  --tds-grey900: #191f28;
+  --brand-blue: #3182f6;
+  --text-muted: #4e5968;
+  --text-strong: #191f28;
 }
 
 html {
@@ -16,13 +16,13 @@ html {
 
 body {
   background: var(--page-bg);
-  color: var(--tds-grey900);
+  color: var(--text-strong);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* 데스크톱에서도 토스 미니앱처럼 보이도록 폰 너비 프레임으로 감싼다 */
-.tds-frame {
+/* 데스크톱에서도 모바일 앱처럼 보이도록 폰 너비 프레임으로 감싼다 */
+.app-frame {
   position: relative;
   max-width: 480px;
   margin: 0 auto;
@@ -33,7 +33,7 @@ body {
   flex-direction: column;
 }
 @media (min-width: 520px) {
-  .tds-frame {
+  .app-frame {
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.03), 0 12px 40px rgba(0, 0, 0, 0.06);
   }
 }
