@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 export const STEP_LABELS = [
   "피해 유형",
+  "신고인 정보",
   "자료 업로드",
   "AI 분류",
   "타임라인",
@@ -44,7 +45,7 @@ export default function StepScreen({
           type="button"
           aria-label="뒤로가기"
           onClick={() => (backTo ? router.push(backTo) : router.back())}
-          className="grid h-10 w-10 place-items-center rounded-full text-[#333d4b] active:bg-[#f2f4f6]"
+          className="grid h-11 w-11 place-items-center rounded-full text-[#333d4b] active:bg-[#f2f4f6]"
         >
           <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6">
             <path
