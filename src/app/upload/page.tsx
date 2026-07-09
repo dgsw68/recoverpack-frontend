@@ -2,22 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Button, ListRow } from "@toss/tds-mobile";
+import { Badge, ListRow } from "@toss/tds-mobile";
 import StepScreen from "@/components/StepScreen";
 import NoticeBox from "@/components/NoticeBox";
+import RequireAuth from "@/components/RequireAuth";
+import PillButton from "@/components/PillButton";
 import { filesToUploadedFiles } from "@/lib/files";
-import { uploadFiles } from "@/lib/api";
-import { loadOrCreateProject, patchProject, setFiles, uid } from "@/lib/storage";
+import { uploadFiles } from "@/api/uploads";
+import { ApiError } from "@/api/client";
+import { loadOrCreateProject, setFiles } from "@/lib/storage";
 import { FILE_CATEGORIES, type FileCategory, type UploadedFile } from "@/lib/types";
+import { FileTextIcon } from "@/components/icons";
 
-const SAMPLE_FILES: Omit<UploadedFile, "id" | "createdAt">[] = [
-  { name: "거실_바닥_침수.jpg", size: 2_310_000, mimeType: "image/jpeg", fileType: "피해 사진", isImage: true },
-  { name: "벽면_수분오염.jpg", size: 1_820_000, mimeType: "image/jpeg", fileType: "피해 사진", isImage: true },
-  { name: "세탁기_침수.jpg", size: 2_040_000, mimeType: "image/jpeg", fileType: "피해 사진", isImage: true },
-  { name: "청소비_영수증.jpg", size: 640_000, mimeType: "image/jpeg", fileType: "영수증", isImage: true },
-  { name: "복구공사_견적서.pdf", size: 320_000, mimeType: "application/pdf", fileType: "수리 견적서", isImage: false },
-  { name: "재난문자_캡처.png", size: 480_000, mimeType: "image/png", fileType: "재난문자 캡처", isImage: true },
-];
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const MAX_BATCH = 20;
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -25,15 +23,28 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function UploadPage() {
+function categoryLabel(value: FileCategory): string {
+  return FILE_CATEGORIES.find((c) => c.value === value)?.label ?? value;
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function UploadPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [files, setLocalFiles] = useState<UploadedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const project = loadOrCreateProject();
+    setProjectId(project.projectId);
     setLocalFiles(project.files);
   }, []);
 
@@ -43,22 +54,21 @@ export default function UploadPage() {
   };
 
   const addFiles = async (fileList: FileList | File[]) => {
+    setError(null);
+    const arr = Array.from(fileList);
+    const oversized = arr.filter((f) => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      setError(`25MB를 초과하는 파일은 올릴 수 없어요: ${oversized.map((f) => f.name).join(", ")}`);
+    }
+    const valid = arr.filter((f) => f.size <= MAX_FILE_SIZE);
+    if (valid.length === 0) return;
     setBusy(true);
     try {
-      const uploaded = await filesToUploadedFiles(fileList);
+      const uploaded = await filesToUploadedFiles(valid);
       persist([...files, ...uploaded]);
     } finally {
       setBusy(false);
     }
-  };
-
-  const loadSamples = () => {
-    const samples: UploadedFile[] = SAMPLE_FILES.map((s) => ({
-      ...s,
-      id: uid("file"),
-      createdAt: new Date().toISOString(),
-    }));
-    persist([...files, ...samples]);
   };
 
   const changeType = (id: string, type: FileCategory) => {
@@ -70,15 +80,44 @@ export default function UploadPage() {
   };
 
   const handleNext = async () => {
-    setBusy(true);
-    const project = loadOrCreateProject();
-    try {
-      await uploadFiles(project.projectId, files);
-      patchProject({ backendConnected: true });
-    } catch {
-      patchProject({ backendConnected: false });
+    if (!projectId) {
+      setError("프로젝트 정보가 없어요. 이전 단계로 돌아가 주세요.");
+      return;
     }
-    router.push("/analysis");
+    setBusy(true);
+    setError(null);
+    try {
+      const groups = FILE_CATEGORIES.map((c) => c.value).reduce<
+        Record<FileCategory, UploadedFile[]>
+      >(
+        (acc, type) => {
+          acc[type] = files.filter((f) => f.fileType === type);
+          return acc;
+        },
+        { image: [], receipt: [], estimate: [], disaster_alert: [] },
+      );
+
+      const next = [...files];
+      for (const [fileType, group] of Object.entries(groups) as [FileCategory, UploadedFile[]][]) {
+        if (group.length === 0) continue;
+        for (const batch of chunk(group, MAX_BATCH)) {
+          const rawFiles = batch.map((f) => f.file).filter((f): f is File => !!f);
+          if (rawFiles.length === 0) continue;
+          const res = await uploadFiles(projectId, rawFiles, fileType);
+          res.files.forEach((remote, i) => {
+            const target = batch[i];
+            const idx = next.findIndex((f) => f.id === target.id);
+            if (idx >= 0) next[idx] = { ...next[idx], remoteId: remote.id };
+          });
+        }
+      }
+      persist(next);
+      router.push("/analysis");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "파일 업로드에 실패했어요.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const counts = files.reduce<Record<string, number>>((acc, f) => {
@@ -88,21 +127,28 @@ export default function UploadPage() {
 
   return (
     <StepScreen
-      step={2}
-      backTo="/damage-type"
+      step={3}
+      backTo="/reporter"
       title="피해 자료를 올려주세요"
-      subtitle="사진·영수증·수리 견적서·재난문자 캡처를 올려주세요. 파일은 브라우저에만 저장되고, AI가 자동으로 분류해요."
+      subtitle="사진·영수증·수리 견적서·재난문자 캡처를 올려주세요. AI가 자동으로 분류해요."
       footer={
-        <Button
-          key={files.length === 0 ? "cta-empty" : "cta-ready"}
-          display="full"
-          size="xlarge"
-          loading={busy}
-          disabled={files.length === 0}
-          onClick={handleNext}
-        >
-          {files.length > 0 ? `${files.length}개 자료로 AI 분류 시작` : "자료를 먼저 올려주세요"}
-        </Button>
+        <>
+          {error && (
+            <div className="mb-2">
+              <NoticeBox tone="warning">{error}</NoticeBox>
+            </div>
+          )}
+          <PillButton
+            key={files.length === 0 ? "cta-empty" : "cta-ready"}
+            display="full"
+            size="xlarge"
+            loading={busy}
+            disabled={files.length === 0}
+            onClick={handleNext}
+          >
+            {files.length > 0 ? `${files.length}개 자료로 AI 분류 시작` : "자료를 먼저 올려주세요"}
+          </PillButton>
+        </>
       }
     >
       {/* 드롭존 */}
@@ -128,14 +174,11 @@ export default function UploadPage() {
           </svg>
         </span>
         <p className="mt-3 font-bold text-[#333d4b]">파일을 끌어다 놓거나 선택하세요</p>
-        <p className="mt-1 text-[13px] text-[#8b95a1]">이미지(JPG·PNG) · PDF · 여러 개 가능</p>
+        <p className="mt-1 text-[13px] text-[#8b95a1]">이미지(JPG·PNG) · PDF · 파일당 25MB 이하 · 최대 20개씩</p>
         <div className="mt-4 flex w-full flex-col gap-2">
-          <Button display="full" size="medium" loading={busy} onClick={() => inputRef.current?.click()}>
+          <PillButton display="full" size="medium" loading={busy} onClick={() => inputRef.current?.click()}>
             파일 선택
-          </Button>
-          <Button display="full" size="medium" color="dark" variant="weak" onClick={loadSamples}>
-            샘플 자료 불러오기
-          </Button>
+          </PillButton>
         </div>
         <input
           ref={inputRef}
@@ -158,7 +201,7 @@ export default function UploadPage() {
           </Badge>
           {Object.entries(counts).map(([type, n]) => (
             <Badge key={type} size="small" color="elephant" variant="weak">
-              {type} {n}
+              {categoryLabel(type as FileCategory)} {n}
             </Badge>
           ))}
         </div>
@@ -176,7 +219,9 @@ export default function UploadPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={file.previewUrl} alt={file.name} className="h-full w-full object-cover" />
                     ) : (
-                      <span className="grid h-full w-full place-items-center text-[20px]">📄</span>
+                      <span className="grid h-full w-full place-items-center text-[#b0b8c1]">
+                        <FileTextIcon className="h-5 w-5" />
+                      </span>
                     )}
                   </div>
                 }
@@ -186,7 +231,7 @@ export default function UploadPage() {
                     type="button"
                     aria-label="파일 삭제"
                     onClick={() => removeFile(file.id)}
-                    className="grid h-8 w-8 place-items-center rounded-full text-[#8b95a1] active:bg-[#f2f4f6]"
+                    className="grid h-11 w-11 place-items-center rounded-full text-[#8b95a1] active:bg-[#f2f4f6]"
                   >
                     <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
                       <path d="M6 7h12M9 7V5.5A1.5 1.5 0 0110.5 4h3A1.5 1.5 0 0115 5.5V7m-8 0l.7 11a2 2 0 002 1.9h4.6a2 2 0 002-1.9L17 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -202,7 +247,7 @@ export default function UploadPage() {
                   className="w-full rounded-xl border border-[#e5e8eb] bg-[#f9fafb] px-3 py-2 text-[13px] font-medium text-[#4e5968] outline-none focus:border-[#3182f6]"
                 >
                   {FILE_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                    <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
                 </select>
               </div>
@@ -211,14 +256,19 @@ export default function UploadPage() {
         </div>
       )}
 
-      {files.length === 0 && (
+      {files.length === 0 && !error && (
         <div className="mt-4">
-          <NoticeBox tone="info">
-            아직 올린 자료가 없어요. 실제 파일을 올리거나 <b>샘플 자료 불러오기</b>로
-            데모를 진행할 수 있어요.
-          </NoticeBox>
+          <NoticeBox tone="info">아직 올린 자료가 없어요. 파일을 올려 주세요.</NoticeBox>
         </div>
       )}
     </StepScreen>
+  );
+}
+
+export default function UploadPageWrapper() {
+  return (
+    <RequireAuth>
+      <UploadPage />
+    </RequireAuth>
   );
 }
