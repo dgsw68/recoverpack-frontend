@@ -10,10 +10,10 @@ const MAX_THUMB = 480; // px
 
 function guessCategory(file: File): FileCategory {
   const name = file.name.toLowerCase();
-  if (/(영수증|receipt)/.test(name)) return "영수증";
-  if (/(견적|estimate|quote)/.test(name)) return "수리 견적서";
-  if (/(재난|문자|alert|sms)/.test(name)) return "재난문자 캡처";
-  return "피해 사진";
+  if (/(영수증|receipt)/.test(name)) return "receipt";
+  if (/(견적|estimate|quote)/.test(name)) return "estimate";
+  if (/(재난|문자|alert|sms)/.test(name)) return "disaster_alert";
+  return "image";
 }
 
 async function makeThumbnail(file: File): Promise<string | undefined> {
@@ -59,6 +59,7 @@ export async function fileToUploadedFile(file: File): Promise<UploadedFile> {
     size: file.size,
     mimeType: file.type || "application/octet-stream",
     fileType: guessCategory(file),
+    file,
     previewUrl,
     isImage,
     createdAt: new Date().toISOString(),

@@ -1,6 +1,7 @@
 "use client";
 
-import { Badge, Button } from "@toss/tds-mobile";
+import { Badge } from "@toss/tds-mobile";
+import PillButton from "@/components/PillButton";
 import { uid } from "@/lib/storage";
 import type { TimelineEvent } from "@/lib/types";
 
@@ -39,7 +40,7 @@ export default function TimelineEditor({
     const now = new Date().toISOString().slice(0, 16);
     onChange([
       ...events,
-      { id: uid("tl"), datetime: now, title: "새 이벤트", description: "", source: "" },
+      { id: uid("tl"), eventDate: now, title: "새 이벤트", description: "" },
     ]);
   };
 
@@ -55,12 +56,12 @@ export default function TimelineEditor({
             <div className="rounded-2xl border border-[#e5e8eb] bg-white p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <Badge size="small" color="blue" variant="weak">
-                  {formatDisplay(event.datetime)}
+                  {formatDisplay(event.eventDate)}
                 </Badge>
                 <button
                   type="button"
                   onClick={() => remove(event.id)}
-                  className="rounded-lg px-2 py-1 text-[13px] font-medium text-[#8b95a1] active:bg-[#f2f4f6]"
+                  className="-mr-2 flex min-h-11 min-w-11 items-center justify-center rounded-lg px-3 text-[13px] font-medium text-[#8b95a1] active:bg-[#f2f4f6]"
                   aria-label="이벤트 삭제"
                 >
                   삭제
@@ -72,8 +73,8 @@ export default function TimelineEditor({
                   <label className={labelCls}>날짜 / 시간</label>
                   <input
                     type="datetime-local"
-                    value={event.datetime}
-                    onChange={(e) => update(event.id, { datetime: e.target.value })}
+                    value={event.eventDate}
+                    onChange={(e) => update(event.id, { eventDate: e.target.value })}
                     className={inputCls}
                   />
                 </div>
@@ -97,16 +98,6 @@ export default function TimelineEditor({
                     placeholder="어떤 일이 있었는지 적어주세요"
                   />
                 </div>
-                <div>
-                  <label className={labelCls}>출처</label>
-                  <input
-                    type="text"
-                    value={event.source}
-                    onChange={(e) => update(event.id, { source: e.target.value })}
-                    className={inputCls}
-                    placeholder="예: 행정안전부 재난문자, 통화 기록"
-                  />
-                </div>
               </div>
             </div>
           </div>
@@ -114,9 +105,9 @@ export default function TimelineEditor({
       </div>
 
       <div className="mt-3">
-        <Button display="full" size="large" color="dark" variant="weak" onClick={add}>
+        <PillButton display="full" size="large" color="dark" variant="weak" onClick={add}>
           + 이벤트 추가
-        </Button>
+        </PillButton>
       </div>
     </div>
   );

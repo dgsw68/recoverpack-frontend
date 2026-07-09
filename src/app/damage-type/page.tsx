@@ -72,6 +72,12 @@ function DamageTypePage() {
         title: finalTitle,
         location,
         occurredAt: formattedOccurredAt,
+        // createProject always makes a brand-new backend project, so any
+        // evidence/timeline/files cached from a previous run no longer
+        // belong to this projectId and must not be reused.
+        files: [],
+        evidence: [],
+        timeline: [],
         ...(!("projectId" in res)
           ? {
               description: res.description,

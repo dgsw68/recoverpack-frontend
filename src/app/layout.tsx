@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   title: "RecoverPack — 재난 피해 증거 패키지 생성기",
   description:
     "사진, 영수증, 재난문자, 시간 정보를 AI가 분류하고 설명문과 타임라인으로 정리해 보험사·주민센터·집주인에게 제출하기 쉽게 만들어드립니다.",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export const viewport: Viewport = {
